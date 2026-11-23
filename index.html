@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monitor de Riscos Ocupacionais - Fabricação Digital</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 24px;
+      background: #111827;
+      color: #f9fafb;
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    h1 { margin: 0; font-size: 1.5rem; }
+
+    .controls-bar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .btn-group, .status-group {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .divider {
+      width: 1px;
+      height: 26px;
+      background: #374151;
+      margin: 0 4px;
+    }
+
+    /* Botões clicáveis (formato pílula arredondada) */
+    .btn {
+      padding: 7px 15px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid #3b82f6;
+      background: #1d4ed8;
+      color: #ffffff;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn:hover { background: #2563eb; }
+    .btn:active { transform: scale(0.97); }
+    .btn.stop {
+      background: #374151;
+      border-color: #6b7280;
+    }
+    .btn.stop:hover { background: #4b5563; }
+
+    /* Menu dropdown do Simular Alerta */
+    .alert-menu-wrap {
+      position: relative;
+      display: none;
+    }
+    .alert-menu-wrap.visible { display: inline-block; }
+
+    .btn.spike {
+      background: #b91c1c;
+      border-color: #ef4444;
+    }
+    .btn.spike:hover { background: #dc2626; }
+    .btn.spike.has-active {
+      background: #991b1b;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.45);
+    }
+
+    .alert-popover {
+      display: none;
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      min-width: 230px;
+      background: #1f2937;
+      border: 1px solid #4b5563;
+      border-radius: 10px;
+      padding: 12px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+      z-index: 50;
+    }
+    .alert-popover.open { display: block; }
+    .popover-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #9ca3af;
+      margin-bottom: 10px;
+    }
+    .sensor-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 4px;
+      font-size: 0.88rem;
+      cursor: pointer;
+      border-radius: 6px;
+    }
+    .sensor-option:hover { background: #374151; }
+    .sensor-option input {
+      accent-color: #ef4444;
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+    }
+    .popover-actions {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #374151;
+    }
+    .mini-btn {
+      flex: 1;
+      padding: 5px 8px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      border-radius: 6px;
+      border: 1px solid #4b5563;
+      background: #374151;
+      color: #f9fafb;
+      cursor: pointer;
+    }
+    .mini-btn:hover { background: #4b5563; }
+    .mini-btn.reset {
+      background: #065f46;
+      border-color: #10b981;
+    }
+    .mini-btn.reset:hover { background: #047857; }
+
+    /* Indicadores de status (caixas retangulares com borda lateral — não clicáveis) */
+    .status-tag {
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      background: #1f2937;
+      color: #9ca3af;
+      border: 1px solid #374151;
+      border-left: 4px solid #6b7280;
+      user-select: none;
+    }
+    .status-tag.online {
+      color: #34d399;
+      border-left-color: #10b981;
+      background: #064e3b33;
+    }
+    .status-tag.offline {
+      color: #f87171;
+      border-left-color: #ef4444;
+      background: #7f1d1d33;
+    }
+    .status-tag.simulating {
+      color: #60a5fa;
+      border-left-color: #3b82f6;
+      background: #1e3a8a33;
+    }
+    .status-tag.buzzer-off {
+      color: #34d399;
+      border-left-color: #10b981;
+      background: #064e3b33;
+    }
+    .status-tag.buzzer-on {
+      color: #fef2f2;
+      background: #991b1b;
+      border-color: #ef4444;
+      border-left: 4px solid #fca5a5;
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: #1f2937;
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid #374151;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .card.danger {
+      border-color: #ef4444;
+      background: #2b1922;
+    }
+    .label { font-size: 0.85rem; color: #9ca3af; }
+    .value { font-size: 1.9rem; font-weight: 700; margin-top: 6px; }
+    .alert { color: #f87171; font-size: 0.85rem; font-weight: 600; margin-top: 6px; min-height: 1.2em; }
+    .charts {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+    }
+    .chart-box {
+      background: #1f2937;
+      padding: 16px;
+      border-radius: 12px;
+      border: 1px solid #374151;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Monitoramento Ambiental — Fabricação Digital</h1>
+    <div class="controls-bar">
+      <div class="btn-group">
+        <button id="simBtn" class="btn">▶ Modo Simulação</button>
+
+        <div id="alertMenuWrap" class="alert-menu-wrap">
+          <button id="spikeBtn" class="btn spike">⚠ Simular Alerta ▾</button>
+          <div id="alertPopover" class="alert-popover">
+            <div class="popover-title">Sensores em alerta</div>
+            <label class="sensor-option">
+              <input type="checkbox" id="chkTemp" /> Temperatura (≥ 35 °C)
+            </label>
+            <label class="sensor-option">
+              <input type="checkbox" id="chkGas" /> Gás / Fumaça (≥ 1500)
+            </label>
+            <label class="sensor-option">
+              <input type="checkbox" id="chkSound" /> Nível Sonoro (≥ 80)
+            </label>
+            <div class="popover-actions">
+              <button id="btnAllAlerts" class="mini-btn" type="button">Todos</button>
+              <button id="btnResetAlerts" class="mini-btn reset" type="button">Normalizar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="status-group">
+        <div id="status" class="status-tag">Conectando...</div>
+        <div id="buzzerStatus" class="status-tag buzzer-off">Buzzer: Inativo (Normal)</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div id="tempCard" class="card">
+      <div class="label">Temperatura (DHT11)</div>
+      <div id="temp" class="value">-- °C</div>
+      <div id="tempAlert" class="alert"></div>
+    </div>
+
+    <div class="card">
+      <div class="label">Umidade (DHT11)</div>
+      <div id="hum" class="value">-- %</div>
+      <div class="alert"></div>
+    </div>
+
+    <div id="gasCard" class="card">
+      <div class="label">Gás / Fumaça (MQ-2)</div>
+      <div id="gas" class="value">--</div>
+      <div id="gasAlert" class="alert"></div>
+    </div>
+
+    <div id="soundCard" class="card">
+      <div class="label">Nível Sonoro (INMP441)</div>
+      <div id="sound" class="value">--</div>
+      <div id="soundAlert" class="alert"></div>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="chart-box"><canvas id="envChart"></canvas></div>
+    <div class="chart-box"><canvas id="audioGasChart"></canvas></div>
+  </div>
+
+  <script>
+    const TEMP_THRESHOLD = 35.0;  // °C
+    const GAS_THRESHOLD = 1500;   // Valor ADC (0 a 4095)
+    const SOUND_THRESHOLD = 80.0; // Nível sonoro relativo
+    const MAX_POINTS = 30;
+
+    Chart.defaults.color = "#d1d5db";
+    Chart.defaults.borderColor = "rgba(255, 255, 255, 0.08)";
+
+    const simBtn = document.getElementById("simBtn");
+    const alertMenuWrap = document.getElementById("alertMenuWrap");
+    const spikeBtn = document.getElementById("spikeBtn");
+    const alertPopover = document.getElementById("alertPopover");
+    const chkTemp = document.getElementById("chkTemp");
+    const chkGas = document.getElementById("chkGas");
+    const chkSound = document.getElementById("chkSound");
+    const btnAllAlerts = document.getElementById("btnAllAlerts");
+    const btnResetAlerts = document.getElementById("btnResetAlerts");
+
+    const statusEl = document.getElementById("status");
+    const buzzerEl = document.getElementById("buzzerStatus");
+
+    const tempEl = document.getElementById("temp");
+    const tempCard = document.getElementById("tempCard");
+    const tempAlertEl = document.getElementById("tempAlert");
+
+    const humEl = document.getElementById("hum");
+
+    const gasEl = document.getElementById("gas");
+    const gasCard = document.getElementById("gasCard");
+    const gasAlertEl = document.getElementById("gasAlert");
+
+    const soundEl = document.getElementById("sound");
+    const soundCard = document.getElementById("soundCard");
+    const soundAlertEl = document.getElementById("soundAlert");
+
+    // Gráfico 1: Temperatura e Umidade
+    const envChart = new Chart(document.getElementById("envChart"), {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: "Temperatura (°C)",
+            data: [],
+            borderColor: "#f97316",
+            backgroundColor: "rgba(249, 115, 22, 0.15)",
+            borderWidth: 2,
+            tension: 0.3,
+            pointRadius: 2
+          },
+          {
+            label: "Umidade (%)",
+            data: [],
+            borderColor: "#38bdf8",
+            backgroundColor: "rgba(56, 189, 248, 0.15)",
+            borderWidth: 2,
+            tension: 0.3,
+            pointRadius: 2
+          }
+        ]
+      },
+      options: {
+        animation: false,
+        responsive: true,
+        scales: { y: { suggestedMin: 20, suggestedMax: 70 } }
+      }
+    });
+
+    // Gráfico 2: MQ-2 e Som
+    const audioGasChart = new Chart(document.getElementById("audioGasChart"), {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: "MQ-2 (ADC)",
+            data: [],
+            yAxisID: "yGas",
+            borderColor: "#facc15",
+            backgroundColor: "rgba(250, 204, 21, 0.15)",
+            borderWidth: 2,
+            tension: 0.3,
+            pointRadius: 2
+          },
+          {
+            label: "Som (Nível)",
+            data: [],
+            yAxisID: "ySound",
+            borderColor: "#c084fc",
+            backgroundColor: "rgba(192, 132, 252, 0.15)",
+            borderWidth: 2,
+            tension: 0.3,
+            pointRadius: 2
+          }
+        ]
+      },
+      options: {
+        animation: false,
+        responsive: true,
+        scales: {
+          yGas: {
+            type: "linear",
+            position: "left",
+            min: 0,
+            suggestedMax: 2200,
+            title: { display: true, text: "MQ-2 (ADC)", color: "#facc15" }
+          },
+          ySound: {
+            type: "linear",
+            position: "right",
+            min: 30,
+            suggestedMax: 100,
+            grid: { drawOnChartArea: false },
+            title: { display: true, text: "Som", color: "#c084fc" }
+          }
+        }
+      }
+    });
+
+    function pushPoint(chart, label, values) {
+      chart.data.labels.push(label);
+      values.forEach((v, i) => chart.data.datasets[i].data.push(v));
+      if (chart.data.labels.length > MAX_POINTS) {
+        chart.data.labels.shift();
+        chart.data.datasets.forEach(ds => ds.data.shift());
+      }
+      chart.update();
+    }
+
+    function setAlertState(card, alertEl, isDanger, msg) {
+      card.classList.toggle("danger", isDanger);
+      alertEl.textContent = isDanger ? msg : "";
+    }
+
+    function updateDashboard(d) {
+      const now = new Date().toLocaleTimeString();
+      let anyAlert = false;
+
+      if (d.temp !== undefined) {
+        const t = Number(d.temp);
+        tempEl.textContent = `${t.toFixed(1)} °C`;
+        const danger = t >= TEMP_THRESHOLD;
+        setAlertState(tempCard, tempAlertEl, danger, "⚠ Temperatura crítica");
+        if (danger) anyAlert = true;
+      }
+
+      if (d.hum !== undefined) {
+        humEl.textContent = `${Number(d.hum).toFixed(0)} %`;
+      }
+
+      if (d.gas !== undefined) {
+        const g = Number(d.gas);
+        gasEl.textContent = Math.round(g);
+        const danger = g >= GAS_THRESHOLD;
+        setAlertState(gasCard, gasAlertEl, danger, "⚠ Fumaça / gás elevado");
+        if (danger) anyAlert = true;
+      }
+
+      if (d.sound !== undefined) {
+        const s = Number(d.sound);
+        soundEl.textContent = s.toFixed(1);
+        const danger = s >= SOUND_THRESHOLD;
+        setAlertState(soundCard, soundAlertEl, danger, "⚠ Ruído elevado");
+        if (danger) anyAlert = true;
+      }
+
+      const buzzerActive = d.buzzer !== undefined ? Boolean(d.buzzer) : anyAlert;
+      buzzerEl.textContent = buzzerActive ? "🔊 Buzzer: ALERTA ATIVO" : "Buzzer: Inativo (Normal)";
+      buzzerEl.className = buzzerActive ? "status-tag buzzer-on" : "status-tag buzzer-off";
+
+      pushPoint(envChart, now, [d.temp ?? null, d.hum ?? null]);
+      pushPoint(audioGasChart, now, [d.gas ?? null, d.sound ?? null]);
+    }
+
+    // ================== WEBSOCKET ==================
+    let ws = null;
+    let reconnectTimer = null;
+    let isSimulating = false;
+    let simTimer = null;
+
+    function connectWebSocket() {
+      if (isSimulating) return;
+
+      const host = location.hostname || "192.168.4.1";
+      ws = new WebSocket(`ws://${host}:81`);
+
+      ws.onopen = () => {
+        if (isSimulating) { ws.close(); return; }
+        statusEl.textContent = "Conectado ao ESP32";
+        statusEl.className = "status-tag online";
+      };
+
+      ws.onclose = () => {
+        if (isSimulating) return;
+        statusEl.textContent = "Desconectado — reconectando...";
+        statusEl.className = "status-tag offline";
+        reconnectTimer = setTimeout(connectWebSocket, 2000);
+      };
+
+      ws.onerror = () => { if (ws) ws.close(); };
+
+      ws.onmessage = (event) => {
+        if (isSimulating) return;
+        try {
+          updateDashboard(JSON.parse(event.data));
+        } catch (err) {
+          console.error("Erro ao ler JSON do ESP32:", err);
+        }
+      };
+    }
+
+    // ================== SIMULAÇÃO COM ALERTAS SELECIONÁVEIS ==================
+    let simState = { temp: 26.5, hum: 56.0, gas: 420, sound: 54.0 };
+    const simAlerts = { temp: false, gas: false, sound: false };
+
+    function stepValue(current, target, maxStep, min, max) {
+      const drift = (target - current) * 0.25;
+      const noise = (Math.random() - 0.5) * 2 * maxStep;
+      return Math.min(max, Math.max(min, current + drift + noise));
+    }
+
+    function generateSimulatedData() {
+      simState.temp = simAlerts.temp
+        ? stepValue(simState.temp, 38.5, 0.3, 35.5, 43.0)
+        : stepValue(simState.temp, 26.5, 0.2, 24.0, 30.0);
+
+      simState.hum = stepValue(simState.hum, 56.0, 0.8, 48.0, 65.0);
+
+      simState.gas = simAlerts.gas
+        ? stepValue(simState.gas, 1880, 45, 1600, 2300)
+        : stepValue(simState.gas, 420, 18, 320, 550);
+
+      simState.sound = simAlerts.sound
+        ? stepValue(simState.sound, 86.5, 1.8, 81.5, 94.0)
+        : stepValue(simState.sound, 54.0, 1.5, 46.0, 64.0);
+
+      return { ...simState };
+    }
+
+    function syncAlertButtonLabel() {
+      const count = [simAlerts.temp, simAlerts.gas, simAlerts.sound].filter(Boolean).length;
+      spikeBtn.textContent = count > 0 ? `⚠ Alertas Ativos (${count}) ▾` : "⚠ Simular Alerta ▾";
+      spikeBtn.classList.toggle("has-active", count > 0);
+    }
+
+    function applySensorToggle(sensor, enabled) {
+      simAlerts[sensor] = enabled;
+      if (sensor === "temp")  simState.temp  = enabled ? 37.8 : 26.8;
+      if (sensor === "gas")   simState.gas   = enabled ? 1820 : 440;
+      if (sensor === "sound") simState.sound = enabled ? 85.5 : 55.0;
+      syncAlertButtonLabel();
+      if (isSimulating) updateDashboard(generateSimulatedData());
+    }
+
+    chkTemp.addEventListener("change", () => applySensorToggle("temp", chkTemp.checked));
+    chkGas.addEventListener("change", () => applySensorToggle("gas", chkGas.checked));
+    chkSound.addEventListener("change", () => applySensorToggle("sound", chkSound.checked));
+
+    btnAllAlerts.addEventListener("click", () => {
+      chkTemp.checked = chkGas.checked = chkSound.checked = true;
+      simAlerts.temp = simAlerts.gas = simAlerts.sound = true;
+      simState.temp = 37.8; simState.gas = 1820; simState.sound = 85.5;
+      syncAlertButtonLabel();
+      if (isSimulating) updateDashboard(generateSimulatedData());
+    });
+
+    btnResetAlerts.addEventListener("click", () => {
+      chkTemp.checked = chkGas.checked = chkSound.checked = false;
+      simAlerts.temp = simAlerts.gas = simAlerts.sound = false;
+      simState.temp = 26.8; simState.gas = 440; simState.sound = 55.0;
+      syncAlertButtonLabel();
+      if (isSimulating) updateDashboard(generateSimulatedData());
+    });
+
+    spikeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      alertPopover.classList.toggle("open");
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!alertMenuWrap.contains(e.target)) {
+        alertPopover.classList.remove("open");
+      }
+    });
+
+    simBtn.addEventListener("click", () => {
+      isSimulating = !isSimulating;
+
+      if (isSimulating) {
+        clearTimeout(reconnectTimer);
+        if (ws) ws.close();
+
+        simBtn.textContent = "⏹ Parar Simulação";
+        simBtn.classList.add("stop");
+        alertMenuWrap.classList.add("visible");
+        statusEl.textContent = "Modo Simulação Ativo";
+        statusEl.className = "status-tag simulating";
+
+        updateDashboard(generateSimulatedData());
+        simTimer = setInterval(() => {
+          updateDashboard(generateSimulatedData());
+        }, 1000);
+      } else {
+        clearInterval(simTimer);
+        alertPopover.classList.remove("open");
+        alertMenuWrap.classList.remove("visible");
+        chkTemp.checked = chkGas.checked = chkSound.checked = false;
+        simAlerts.temp = simAlerts.gas = simAlerts.sound = false;
+        syncAlertButtonLabel();
+
+        simBtn.textContent = "▶ Modo Simulação";
+        simBtn.classList.remove("stop");
+        statusEl.textContent = "Reconectando ao ESP32...";
+        statusEl.className = "status-tag";
+
+        connectWebSocket();
+      }
+    });
+
+    connectWebSocket();
+  </script>
+</body>
+</html>
